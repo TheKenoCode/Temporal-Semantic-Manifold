@@ -1,0 +1,62 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Community {
+  id          Int              @id @default(autoincrement())
+  name        String
+  color       String
+  description String?
+  nodes       NodeCommunity[]
+}
+
+model Node {
+  id             Int              @id @default(autoincrement())
+  timestamp      DateTime
+  label          String
+  embedding      Json
+  metadata       Json?
+  communities    NodeCommunity[]
+  outgoingEdges  Edge[]           @relation("EdgeSource")
+  incomingEdges  Edge[]           @relation("EdgeTarget")
+
+  @@index([timestamp])
+}
+
+model NodeCommunity {
+  nodeId      Int
+  communityId Int
+  strength    Float
+
+  node      Node      @relation(fields: [nodeId], references: [id])
+  community Community @relation(fields: [communityId], references: [id])
+
+  @@id([nodeId, communityId])
+}
+
+model Edge {
+  id        Int      @id @default(autoincrement())
+  sourceId  Int
+  targetId  Int
+  weight    Float
+  type      String
+  createdAt DateTime @default(now())
+
+  source Node @relation("EdgeSource", fields: [sourceId], references: [id])
+  target Node @relation("EdgeTarget", fields: [targetId], references: [id])
+
+  @@index([sourceId])
+  @@index([targetId])
+  @@index([createdAt])
+}
