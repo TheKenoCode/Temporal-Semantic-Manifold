@@ -1,8 +1,25 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// ============================================================================
+// CULTURAL ANCESTRY & TRAITS EXPLORER
+// ============================================================================
+// This schema models cultural trait evolution across ancestral populations:
+//
+// - Community  → Ancestral population / cultural lineage (e.g., Yamnaya, Anatolian Farmer)
+// - Node       → Cultural trait instance (e.g., "pastoral nomadism", "epic heroic poetry")
+// - NodeCommunity → Ancestry contribution / admixture weight for each trait
+// - Edge       → Trait relationships: diffusion, derivation, semantic similarity
+//
+// The 3D manifold visualizes:
+//   x/y plane = semantic similarity of traits (embedding projection)
+//   z axis    = time (chronology of trait emergence)
+//   ellipsoids = ancestral populations / cultural clusters
+//   edges     = influence flows between traits
+//
+// NOTE: Historical eras (BCE/CE) are stored as strings in metadata/region
+// since PostgreSQL DateTime doesn't reliably handle dates before year 1 CE.
+// ============================================================================
 
 generator client {
   provider = "prisma-client-js"
@@ -13,31 +30,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Ancestral population or cultural lineage
+// Examples: "Yamnaya / Steppe IE", "Anatolian Farmer", "Slavic MLBA"
 model Community {
-  id          Int              @id @default(autoincrement())
-  name        String
-  color       String
-  description String?
-  nodes       NodeCommunity[]
+  id            Int              @id @default(autoincrement())
+  name          String           // Display name (e.g., "Yamnaya / Steppe IE")
+  color         String           // Hex color for visualization
+  description   String?          // Cultural/historical description
+  region        String?          // Geographic region + era (e.g., "Pontic-Caspian Steppe (~3300 BCE)")
+  generatedFrom String?          // Topic that generated this (for AI-generated communities)
+  isGenerated   Boolean          @default(false) // Whether this was AI-generated
+  nodes         NodeCommunity[]
+
+  @@index([generatedFrom])
+  @@index([isGenerated])
 }
 
+// Cultural trait or trait instance
+// Examples: "pastoral nomadism", "clan-based honor code", "epic heroic poetry"
+// The embedding represents semantic position; metadata stores rich cultural info
 model Node {
   id             Int              @id @default(autoincrement())
-  timestamp      DateTime
-  label          String
-  embedding      Json
-  metadata       Json?
-  communities    NodeCommunity[]
+  timestamp      DateTime         // Synthetic timestamp for ordering (actual era in metadata)
+  label          String           // Trait name (e.g., "Pastoral Nomadism")
+  embedding      Json             // Semantic embedding (number[]) for x/y projection
+  metadata       Json?            // { type, description, era, derivedFrom, etc. }
+  generatedFrom  String?          // Topic that generated this (for AI-generated nodes)
+  communities    NodeCommunity[]  // Ancestry contributions / admixture weights
   outgoingEdges  Edge[]           @relation("EdgeSource")
   incomingEdges  Edge[]           @relation("EdgeTarget")
 
   @@index([timestamp])
+  @@index([generatedFrom])
 }
 
+// Junction table encoding ancestry contributions to traits
+// strength = how much this ancestral population contributes to this trait
+// Analogous to genetic admixture percentages (0.0 - 1.0)
 model NodeCommunity {
   nodeId      Int
   communityId Int
-  strength    Float
+  strength    Float    // 0.0 - 1.0; higher = stronger ancestry link
 
   node      Node      @relation(fields: [nodeId], references: [id])
   community Community @relation(fields: [communityId], references: [id])
@@ -45,12 +78,17 @@ model NodeCommunity {
   @@id([nodeId, communityId])
 }
 
+// Relationships between cultural traits over time
+// Types:
+//   - "semantic"    : Similar traits in embedding space
+//   - "derived_from": Trait B evolved from trait A
+//   - "diffusion"   : Trait spread from one group to another
 model Edge {
   id        Int      @id @default(autoincrement())
   sourceId  Int
   targetId  Int
-  weight    Float
-  type      String
+  weight    Float    // Relationship strength (0.0 - 1.0)
+  type      String   // "semantic" | "derived_from" | "diffusion"
   createdAt DateTime @default(now())
 
   source Node @relation("EdgeSource", fields: [sourceId], references: [id])

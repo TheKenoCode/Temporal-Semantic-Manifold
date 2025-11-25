@@ -1,3 +1,27 @@
+/**
+ * GET /api/edges
+ *
+ * Returns relationships between cultural traits, filtered by time and/or specific nodes.
+ *
+ * Query Parameters:
+ *   - from: Start date (ISO string)
+ *   - to: End date (ISO string)
+ *   - nodeIds: Comma-separated node IDs to filter edges connected to
+ *
+ * Response shape:
+ *   [{
+ *     id, sourceId, targetId, weight, type, createdAt
+ *   }, ...]
+ *
+ * Edge Types:
+ *   - "semantic"     : Traits are similar in embedding space
+ *   - "derived_from" : Target trait evolved from source trait
+ *   - "diffusion"    : Trait spread from one cultural group to another
+ *
+ * Edges flow from older (source) to newer (target) traits, representing
+ * cultural influence and trait transformation over time.
+ */
+
 import { Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 
@@ -26,6 +50,7 @@ export async function GET(request: Request) {
     const fromParam = parseDateParam(searchParams.get('from'));
     const toParam = parseDateParam(searchParams.get('to'));
     const nodeIds = parseNodeIds(searchParams.get('nodeIds'));
+    const topicParam = searchParams.get('topic');
 
     const where: Prisma.EdgeWhereInput = {};
     if (fromParam || toParam) {
@@ -42,6 +67,16 @@ export async function GET(request: Request) {
       ];
     }
 
+    // Filter edges by topic through the nodes they connect
+    if (topicParam) {
+      where.source = {
+        generatedFrom: topicParam,
+      };
+      where.target = {
+        generatedFrom: topicParam,
+      };
+    }
+
     const edges = await prisma.edge.findMany({
       where,
       orderBy: { createdAt: 'asc' },
@@ -53,13 +88,12 @@ export async function GET(request: Request) {
         sourceId: edge.sourceId,
         targetId: edge.targetId,
         weight: edge.weight,
-        type: edge.type,
+        type: edge.type, // "semantic" | "derived_from" | "diffusion"
         createdAt: edge.createdAt,
       })),
     );
   } catch (error) {
-    console.error('[api/edges] Failed to load edges', error);
-    return NextResponse.json({ error: 'Unable to load edges' }, { status: 500 });
+    console.error('[api/edges] Failed to load trait relationships', error);
+    return NextResponse.json({ error: 'Unable to load trait relationships' }, { status: 500 });
   }
 }
-

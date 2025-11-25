@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "validate-setup": "tsx scripts/validate-setup.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -23,6 +24,7 @@
     "classnames": "^2.5.1",
     "date-fns": "^4.1.0",
     "next": "16.0.4",
+    "openai": "^6.9.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "three": "^0.181.2",

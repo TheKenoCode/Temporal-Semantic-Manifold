@@ -1,3 +1,26 @@
+/**
+ * GET /api/nodes
+ *
+ * Returns cultural traits filtered by time range and/or ancestral population.
+ * Each node represents a cultural trait with its semantic embedding and ancestry contributions.
+ *
+ * Query Parameters:
+ *   - from: Start date (ISO string) — default: 7 days ago
+ *   - to: End date (ISO string) — default: now
+ *   - communityId: Filter by ancestral population ID (optional)
+ *
+ * Response shape:
+ *   [{
+ *     id, timestamp, label,
+ *     embedding: number[],
+ *     metadata: { type, description, derivedFrom?, ... },
+ *     communities: [{ id, name, color, strength }, ...]  // ancestry contributions
+ *   }, ...]
+ *
+ * The "communities" array shows how much each ancestral population contributed
+ * to this cultural trait (analogous to genetic admixture percentages).
+ */
+
 import { Prisma } from '@prisma/client';
 import { subDays } from 'date-fns';
 import { NextResponse } from 'next/server';
@@ -31,6 +54,7 @@ export async function GET(request: Request) {
     const fromParam = parseDateParam(searchParams.get('from'));
     const toParam = parseDateParam(searchParams.get('to'));
     const communityParam = searchParams.get('communityId');
+    const topicParam = searchParams.get('topic');
 
     const now = new Date();
     const defaultFrom = subDays(now, DEFAULT_WINDOW_DAYS);
@@ -45,6 +69,12 @@ export async function GET(request: Request) {
       },
     };
 
+    // Filter by AI-generated topic if specified
+    if (topicParam) {
+      where.generatedFrom = topicParam;
+    }
+
+    // communityId filters to traits with contributions from that ancestral population
     if (communityParam) {
       const communityId = Number.parseInt(communityParam, 10);
       if (!Number.isNaN(communityId)) {
@@ -73,17 +103,17 @@ export async function GET(request: Request) {
         label: node.label,
         embedding: toNumberArray(node.embedding),
         metadata: node.metadata,
+        // Ancestry contributions: which populations contributed to this trait
         communities: node.communities.map(({ community, strength }) => ({
           id: community.id,
           name: community.name,
           color: community.color,
-          strength,
+          strength, // 0.0-1.0; higher = stronger ancestry link
         })),
       })),
     );
   } catch (error) {
-    console.error('[api/nodes] Failed to load nodes', error);
-    return NextResponse.json({ error: 'Unable to load nodes' }, { status: 500 });
+    console.error('[api/nodes] Failed to load cultural traits', error);
+    return NextResponse.json({ error: 'Unable to load cultural traits' }, { status: 500 });
   }
 }
-

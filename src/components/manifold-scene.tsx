@@ -323,12 +323,19 @@ function ClusterVolume({ cluster, members, semanticTime }: ClusterVolumeProps) {
  * Cluster trajectory line showing movement through time with smooth curves
  */
 function ClusterTrajectoryLine({ trajectory }: ClusterTrajectoryProps) {
+  // Filter out invalid centroids (with NaN values)
+  const validCentroids = useMemo(() => {
+    return trajectory.centroids.filter(
+      (c) => c && c.every((v) => Number.isFinite(v))
+    );
+  }, [trajectory.centroids]);
+
   // Create smooth curve using Catmull-Rom spline
   const curve = useMemo(() => {
-    if (trajectory.centroids.length < 2) return null;
-    const points = trajectory.centroids.map((c) => new THREE.Vector3(...c));
+    if (validCentroids.length < 2) return null;
+    const points = validCentroids.map((c) => new THREE.Vector3(...c));
     return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.3);
-  }, [trajectory.centroids]);
+  }, [validCentroids]);
 
   const curvePoints = useMemo(() => {
     if (!curve) return [];
@@ -348,7 +355,7 @@ function ClusterTrajectoryLine({ trajectory }: ClusterTrajectoryProps) {
         dashed={false}
       />
       {/* Add glowing spheres at each actual time point */}
-      {trajectory.centroids.map((centroid, i) => (
+      {validCentroids.map((centroid, i) => (
         <mesh key={i} position={centroid}>
           <sphereGeometry args={[0.15, 16, 16]} />
           <meshStandardMaterial
@@ -371,12 +378,20 @@ function ManifoldBoundary({ bounds }: ManifoldBoundaryProps) {
   const meshRef = useRef<THREE.LineSegments>(null);
   const groupRef = useRef<THREE.Group>(null);
 
+  // Validate bounds - don't render if values are invalid
+  const hasValidBounds = 
+    bounds.center.every(Number.isFinite) && 
+    bounds.size.every(Number.isFinite) &&
+    bounds.size.every((v) => v > 0);
+
   useFrame((state) => {
     if (!groupRef.current) return;
     // Subtle breathing animation for boundary
     const pulse = 1 + Math.sin(state.clock.elapsedTime * 0.3) * 0.015;
     groupRef.current.scale.setScalar(pulse);
   });
+
+  if (!hasValidBounds) return null;
 
   return (
     <group ref={groupRef} position={bounds.center}>
@@ -410,6 +425,14 @@ type EdgeLineProps = {
 };
 
 function EdgeLine({ edge, isHighlighted, isActive }: EdgeLineProps) {
+  // Validate edge positions - don't render if any value is NaN or undefined
+  const hasValidStart = edge.start && edge.start.every((v) => Number.isFinite(v));
+  const hasValidEnd = edge.end && edge.end.every((v) => Number.isFinite(v));
+  
+  if (!hasValidStart || !hasValidEnd) {
+    return null; // Skip rendering edges with invalid positions
+  }
+
   // Compute styles based on state - no animation to avoid ref issues
   const opacity = isHighlighted ? 0.95 : isActive ? 0.15 : 0.35;
   const lineWidth = isHighlighted ? 2.5 : 1.2;
